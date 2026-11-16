@@ -14,6 +14,22 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score, f1_score, roc_auc_score, mean_absolute_error
 )
+def send_sms(phone, message):
+    """Send an SMS through the configured Twilio account."""
+    from twilio.rest import Client
+
+    client = Client(
+        st.secrets["TWILIO_ACCOUNT_SID"],
+        st.secrets["TWILIO_AUTH_TOKEN"]
+    )
+
+    result = client.messages.create(
+        body=message,
+        from_=st.secrets["TWILIO_PHONE_NUMBER"],
+        to=phone
+    )
+
+    return result.sid
 
 # =====================================================
 # CONFIGURATION
@@ -1035,6 +1051,68 @@ def render_placement_tab(student, training_data, models):
     <div class="pb-prob">{probability:.0f}% placement probability</div>
     </div>
     """)
+
+    # ----- SMS alert for students needing placement support -----
+
+    if probability < CUSP_THRESHOLD:
+        st.markdown("---")
+        st.markdown("## 📩 Send Placement Support SMS")
+        st.warning(
+            f"{student['Student_Name']} has a placement probability below "
+            f"{CUSP_THRESHOLD}%. You can send a support alert."
+        )
+
+        sms_phone = st.text_input(
+            "Recipient mobile number (with country code)",
+            value="+919632919123",
+            key=f"sms_phone_{student['Student_ID']}"
+        )
+
+        sms_message = (
+            f"Placement Support Alert: {student['Student_Name']} "
+            f"({student['Branch']}) has been flagged as needing placement "
+            "preparation. Please review the placement dashboard and "
+            "contact the placement coordinator for support."
+        )
+
+        st.text_area(
+            "SMS message",
+            value=sms_message,
+            height=110,
+            key=f"sms_message_{student['Student_ID']}",
+            disabled=True
+        )
+
+        if st.button(
+            "📨 Send SMS Alert",
+            key=f"send_sms_{student['Student_ID']}",
+            use_container_width=True
+        ):
+            if not sms_phone.strip().startswith("+") or len(sms_phone.strip()) < 10:
+                st.error(
+                    "Enter a valid phone number with country code, "
+                    "for example +919632919123."
+                )
+            else:
+                try:
+                    with st.spinner("Sending SMS through Twilio..."):
+                        sms_sid = send_sms(sms_phone.strip(), sms_message)
+                    st.success("SMS request submitted successfully to Twilio.")
+                    st.caption(f"Twilio Message SID: {sms_sid}")
+                except Exception as error:
+                    st.error(f"SMS could not be sent: {error}")
+                    st.info(
+                        "Check your Twilio Account SID, Auth Token and "
+                        "Twilio phone number in Streamlit Secrets. Trial "
+                        "accounts may require recipient verification, and "
+                        "SMS delivery to India depends on your Twilio "
+                        "sender/account configuration."
+                    )
+    else:
+        st.caption(
+            "📩 SMS support alert is available when placement probability "
+            f"is below {CUSP_THRESHOLD}%."
+        )
 
     criteria = get_placement_criteria(student)
     core_met = all(item[1] for item in criteria if item[3])
