@@ -18,7 +18,7 @@ from sklearn.metrics import (
 # =====================================================
 
 st.set_page_config(
-    page_title="Student Performance & Placement Insights",
+    page_title="              Student Performance & Placement Insights",
     page_icon="🎓",
     layout="wide"
 )
