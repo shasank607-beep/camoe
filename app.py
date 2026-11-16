@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -1301,36 +1302,6 @@ def render_placement_tab(student, training_data, models):
             "Placement Rate by Projects", "bucket_projects"
         )
 
-    # ----- Heatmap of new criteria -----
-
-    st.markdown("---")
-    st.markdown("## 🔥 Placement Criteria Heatmap")
-
-    heatmap_values = {
-        "CGPA": student["CGPA"] * 10,
-        "10th %": student["Tenth_Pct"],
-        "12th %": student["Twelfth_Pct"],
-        "Coding": student["Coding_Score"],
-        "Communication": student["Communication_Score"],
-        "Projects": min(student["Projects"] / 5 * 100, 100),
-        "Internships": min(student["Internships"] / 3 * 100, 100),
-        "Certifications": min(student["Certifications"] / 4 * 100, 100),
-        "Hackathons": min(student["Hackathons"] / 3 * 100, 100),
-        "Languages": min(student["Programming_Languages"] / 5 * 100, 100)
-    }
-
-    fig = px.imshow(
-        pd.DataFrame([heatmap_values], index=[student["Student_Name"]]),
-        text_auto=".0f",
-        aspect="auto",
-        color_continuous_scale="RdYlGn",
-        zmin=0,
-        zmax=100,
-        title="Placement Profile (0–100 scale)"
-    )
-
-    st.plotly_chart(fig, use_container_width=True, key="placement_heatmap")
-
     # ----- What-if levers -----
 
     st.markdown("---")
@@ -1785,53 +1756,31 @@ def render_academic_tab(student, training_data, regressor, classifier):
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # INDIVIDUAL HEATMAP
-
-    st.markdown("---")
-    st.markdown("## 🔥 Individual Criteria Heatmap")
-
-    heatmap_values = {
-        "Attendance": student["Attendance"],
-        "Assignment": student["Assignment_Score"],
-        "Internal Marks": student["Internal_Marks"],
-        "Previous Marks": student["Previous_Marks"],
-        "Study Hours": min(student["Study_Hours"] / 8 * 100, 100)
-    }
-
-    heatmap_data = pd.DataFrame(
-        [heatmap_values],
-        index=[student["Student_Name"]]
-    )
-
-    fig = px.imshow(
-        heatmap_data,
-        text_auto=".1f",
-        aspect="auto",
-        color_continuous_scale="RdYlGn",
-        zmin=0,
-        zmax=100,
-        title="Student Academic Criteria (0–100 scale)"
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
     # MODEL FEATURE IMPORTANCE
 
     st.markdown("---")
     st.markdown("### 🧠 Model Feature Importance")
 
     importance_data = pd.DataFrame({
-        "Feature": FEATURES,
-        "Marks Model": regressor.feature_importances_,
-        "Pass/Fail Model": classifier.feature_importances_
-    }).set_index("Feature").T
+        "Feature": FEATURES * 2,
+        "Importance": (
+            list(regressor.feature_importances_)
+            + list(classifier.feature_importances_)
+        ),
+        "Model": (
+            ["Marks Model"] * len(FEATURES)
+            + ["Pass/Fail Model"] * len(FEATURES)
+        )
+    })
 
-    fig = px.imshow(
+    fig = px.bar(
         importance_data,
-        text_auto=".3f",
-        aspect="auto",
-        color_continuous_scale="Greens",
-        title="Overall Prediction Model Criteria"
+        x="Feature",
+        y="Importance",
+        color="Model",
+        barmode="group",
+        title="Overall Prediction Model Criteria",
+        color_discrete_sequence=["#65A982", "#A7B8D5"]
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -1910,6 +1859,545 @@ def show_individual_dashboard(
             models["regressor"],
             models["classifier"]
         )
+
+
+# =====================================================
+# COMPANY HIRING SIMULATOR
+# =====================================================
+
+# NOTE: these cut-offs and weights are typical-practice assumptions,
+# not facts about any real company. Edit them to match your campus.
+
+COMPANY_PROFILES = {
+    "General recruiter": {
+        "icon": "🏢",
+        "about": "Balanced screening used by most recruiters.",
+        "min_cgpa": 6.0, "max_backlogs": 0,
+        "min_tenth": 60, "min_twelfth": 60, "min_coding": 0,
+        "branches": BRANCHES,
+        "weights": {
+            "CGPA": 25, "Coding": 25, "Communication": 20,
+            "Projects": 10, "Internships": 10,
+            "Certifications": 5, "Hackathons": 5
+        }
+    },
+    "Product company": {
+        "icon": "🚀",
+        "about": "High coding bar, strong CGPA, CS/IT/ECE branches.",
+        "min_cgpa": 7.0, "max_backlogs": 0,
+        "min_tenth": 60, "min_twelfth": 60, "min_coding": 65,
+        "branches": ["CSE", "IT", "ECE"],
+        "weights": {
+            "Coding": 35, "CGPA": 20, "Projects": 20,
+            "Internships": 10, "Languages": 10, "Hackathons": 5
+        }
+    },
+    "Service company": {
+        "icon": "💼",
+        "about": "Mass hiring: CGPA, aptitude and communication matter "
+                 "most; all branches welcome.",
+        "min_cgpa": 6.0, "max_backlogs": 0,
+        "min_tenth": 60, "min_twelfth": 60, "min_coding": 40,
+        "branches": BRANCHES,
+        "weights": {
+            "Communication": 30, "CGPA": 25, "Coding": 20,
+            "Attendance": 10, "Certifications": 10, "Internships": 5
+        }
+    },
+    "Core company": {
+        "icon": "⚙️",
+        "about": "Core engineering roles: strong CGPA, internships "
+                 "and projects in Mechanical/Civil/EEE/ECE.",
+        "min_cgpa": 6.5, "max_backlogs": 0,
+        "min_tenth": 60, "min_twelfth": 60, "min_coding": 0,
+        "branches": ["Mechanical", "Civil", "EEE", "ECE"],
+        "weights": {
+            "CGPA": 40, "Internships": 20, "Projects": 20,
+            "Communication": 10, "Certifications": 10
+        }
+    },
+    "Startup": {
+        "icon": "⚡",
+        "about": "Flexible on marks, strong on projects, coding and "
+                 "hands-on experience.",
+        "min_cgpa": 6.0, "max_backlogs": 1,
+        "min_tenth": 50, "min_twelfth": 50, "min_coding": 55,
+        "branches": BRANCHES,
+        "weights": {
+            "Projects": 25, "Coding": 25, "Internships": 20,
+            "Hackathons": 15, "Communication": 10, "Languages": 5
+        }
+    }
+}
+
+
+def axis_frame(df):
+    """Skill axes on a 0-100 scale for every student."""
+    return pd.DataFrame({
+        "CGPA": (df["CGPA"].astype(float) * 10).clip(upper=100),
+        "Coding": df["Coding_Score"].astype(float),
+        "Communication": df["Communication_Score"].astype(float),
+        "Projects": (df["Projects"].astype(float) / 5 * 100).clip(upper=100),
+        "Internships": (df["Internships"].astype(float) / 3 * 100).clip(upper=100),
+        "Certifications": (df["Certifications"].astype(float) / 4 * 100).clip(upper=100),
+        "Hackathons": (df["Hackathons"].astype(float) / 3 * 100).clip(upper=100),
+        "Languages": (df["Programming_Languages"].astype(float) / 5 * 100).clip(upper=100),
+        "Attendance": df["Attendance"].astype(float)
+    })
+
+
+def rank_candidates(results, weights, rules, vacancies, waitlist):
+    """Screen, score and rank students for one company.
+
+    Hire score = 40% model placement probability
+               + 60% company-specific fit (weighted skills)."""
+
+    sim = results.copy()
+
+    for col in [
+        "CGPA", "Backlogs", "Tenth_Pct", "Twelfth_Pct",
+        "Coding_Score", "Placement_Probability"
+    ]:
+        sim[col] = pd.to_numeric(sim[col], errors="coerce")
+
+    axes = axis_frame(sim)
+
+    w = pd.Series(weights, dtype=float)
+    w = w / w.sum()
+    fit = (axes[w.index] * w).sum(axis=1)
+
+    sim["Company_Fit"] = fit.round(1)
+    sim["Hire_Score"] = (
+        0.4 * sim["Placement_Probability"] + 0.6 * fit
+    ).round(1)
+
+    checks = [
+        (sim["CGPA"] >= rules["min_cgpa"],
+         f"CGPA below {rules['min_cgpa']:.1f}"),
+        (sim["Backlogs"] <= rules["max_backlogs"],
+         f"more than {int(rules['max_backlogs'])} backlog(s)"),
+        (sim["Tenth_Pct"] >= rules["min_tenth"],
+         f"10th below {rules['min_tenth']:.0f}%"),
+        (sim["Twelfth_Pct"] >= rules["min_twelfth"],
+         f"12th below {rules['min_twelfth']:.0f}%"),
+        (sim["Coding_Score"] >= rules["min_coding"],
+         f"coding score below {rules['min_coding']:.0f}"),
+        (sim["Branch"].isin(rules["branches"]),
+         "branch not hired by this company")
+    ]
+
+    eligible = pd.Series(True, index=sim.index)
+    reasons = pd.Series("", index=sim.index)
+
+    for passed, text in checks:
+        eligible &= passed
+        reasons = reasons.where(passed, reasons + text + "; ")
+
+    sim["Eligible"] = eligible
+    sim["Reason"] = np.where(
+        eligible,
+        "Eligible, ranked below the cut-off",
+        reasons.str.rstrip("; ")
+    )
+
+    order = sim[eligible].sort_values(
+        ["Hire_Score", "CGPA"], ascending=False
+    ).index
+
+    sim["Rank"] = np.nan
+    sim.loc[order, "Rank"] = np.arange(1, len(order) + 1)
+
+    sim["Outcome"] = "Not selected"
+    sim.loc[~eligible, "Outcome"] = "Not eligible"
+    sim.loc[order[:vacancies], "Outcome"] = "Selected"
+    sim.loc[order[vacancies:vacancies + waitlist], "Outcome"] = "Waitlist"
+
+    sim.loc[order[:vacancies], "Reason"] = "Selected"
+    sim.loc[order[vacancies:vacancies + waitlist], "Reason"] = (
+        "Waitlisted: next in line"
+    )
+
+    return sim
+
+
+HIRING_COLUMNS = [
+    "Rank", "Student_ID", "Student_Name", "Branch", "CGPA", "Backlogs",
+    "Coding_Score", "Communication_Score", "Projects", "Internships",
+    "Placement_Probability", "Company_Fit", "Hire_Score"
+]
+
+
+def hiring_table(df, with_reason=False):
+    cols = HIRING_COLUMNS + (["Reason"] if with_reason else [])
+    table = df[cols].copy()
+    table["Rank"] = table["Rank"].astype("Int64")
+
+    st.dataframe(
+        table,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Hire_Score": st.column_config.ProgressColumn(
+                "Hire Score", min_value=0, max_value=100, format="%.1f"
+            ),
+            "Placement_Probability": st.column_config.NumberColumn(
+                "Placement Prob (%)", format="%.1f"
+            ),
+            "Company_Fit": st.column_config.NumberColumn(
+                "Company Fit", format="%.1f"
+            )
+        }
+    )
+
+
+def render_hiring_simulator(results):
+
+    st.markdown("---")
+    st.markdown("## 🏢 Company Hiring Simulator")
+
+    st.caption(
+        "Pick a company type and the number of vacancies to see which "
+        "students are most likely to be selected. Students are screened "
+        "on the company's criteria, then ranked by a hire score "
+        "(40% model placement probability + 60% company-specific fit)."
+    )
+
+    total = len(results)
+
+    c1, c2, c3 = st.columns([2, 1, 1])
+
+    company = c1.selectbox(
+        "Company type",
+        list(COMPANY_PROFILES),
+        key="hire_company"
+    )
+
+    vacancies = int(c2.number_input(
+        "Vacancies (students to hire)",
+        min_value=1,
+        max_value=max(total, 1),
+        value=min(20, total),
+        step=1,
+        key="hire_vacancies"
+    ))
+
+    waitlist = int(c3.number_input(
+        "Waitlist size",
+        min_value=0,
+        max_value=100,
+        value=5,
+        step=1,
+        key="hire_waitlist"
+    ))
+
+    profile = COMPANY_PROFILES[company]
+    tag = company.replace(" ", "_")
+
+    st.info(f"{profile['icon']} **{company}:** {profile['about']}")
+
+    with st.expander(
+        "⚙️ Screening criteria (pre-filled for this company type, editable)"
+    ):
+        a1, a2, a3 = st.columns(3)
+
+        min_cgpa = a1.number_input(
+            "Minimum CGPA", 0.0, 10.0, float(profile["min_cgpa"]),
+            step=0.1, key=f"hire_cgpa_{tag}"
+        )
+        max_backlogs = a2.number_input(
+            "Max backlogs allowed", 0, 15, int(profile["max_backlogs"]),
+            step=1, key=f"hire_backlogs_{tag}"
+        )
+        min_coding = a3.number_input(
+            "Minimum coding score", 0, 100, int(profile["min_coding"]),
+            step=5, key=f"hire_coding_{tag}"
+        )
+
+        b1, b2, b3 = st.columns(3)
+
+        min_tenth = b1.number_input(
+            "Minimum 10th %", 0, 100, int(profile["min_tenth"]),
+            step=5, key=f"hire_tenth_{tag}"
+        )
+        min_twelfth = b2.number_input(
+            "Minimum 12th %", 0, 100, int(profile["min_twelfth"]),
+            step=5, key=f"hire_twelfth_{tag}"
+        )
+        branches = b3.multiselect(
+            "Branches hired", BRANCHES,
+            default=profile["branches"], key=f"hire_branches_{tag}"
+        )
+
+        st.caption(
+            "Ranking weights for this company type: "
+            + ", ".join(
+                f"{name} {weight}%"
+                for name, weight in profile["weights"].items()
+            )
+            + ". These are typical-practice assumptions, not real "
+            "company data."
+        )
+
+    rules = {
+        "min_cgpa": min_cgpa,
+        "max_backlogs": max_backlogs,
+        "min_tenth": min_tenth,
+        "min_twelfth": min_twelfth,
+        "min_coding": min_coding,
+        "branches": branches
+    }
+
+    sim = rank_candidates(
+        results, profile["weights"], rules, vacancies, waitlist
+    )
+
+    selected = sim[sim["Outcome"] == "Selected"].sort_values("Rank")
+    waitlisted = sim[sim["Outcome"] == "Waitlist"].sort_values("Rank")
+    not_selected = sim[
+        ~sim["Outcome"].isin(["Selected", "Waitlist"])
+    ].sort_values(
+        ["Rank", "Hire_Score"], ascending=[True, False],
+        na_position="last"
+    )
+
+    filled = len(selected)
+    eligible_count = int(sim["Eligible"].sum())
+    rate = vacancies / total * 100
+
+    cutoff_text = (
+        f"{selected['Hire_Score'].min():.1f}" if filled else "n/a"
+    )
+
+    render_html(f"""
+    <div class="placement-banner" style="background:linear-gradient(135deg,#1E3A8A,#3B82F6);">
+    <div class="pb-emoji">{profile['icon']}</div>
+    <div class="pb-title">{filled} STUDENTS SELECTED</div>
+    <div class="pb-sub">{company} hiring {vacancies} out of {total} applicants ({rate:.1f}% selection rate)</div>
+    <div class="pb-prob">Cut-off hire score: {cutoff_text}</div>
+    </div>
+    """)
+
+    st.markdown("")
+
+    if filled < vacancies:
+        st.warning(
+            f"Only {eligible_count} student(s) meet the screening "
+            f"criteria, so {vacancies - filled} vacancy(ies) stay "
+            "unfilled. Relax the criteria above to widen the pool."
+        )
+
+    m1, m2, m3, m4 = st.columns(4)
+
+    m1.metric("👥 Applicants", total)
+    m2.metric("📋 Pass Screening", eligible_count)
+    m3.metric("✅ Selected", filled)
+    m4.metric("⏳ Waitlisted", len(waitlisted))
+
+    tab_sel, tab_wait, tab_rest = st.tabs([
+        f"✅ Selected ({filled})",
+        f"⏳ Waitlist ({len(waitlisted)})",
+        f"❌ Not selected ({len(not_selected)})"
+    ])
+
+    with tab_sel:
+        if filled:
+            hiring_table(selected)
+        else:
+            st.info("No student meets the screening criteria.")
+
+    with tab_wait:
+        if len(waitlisted):
+            hiring_table(waitlisted)
+        else:
+            st.info("No waitlisted students.")
+
+    with tab_rest:
+        if len(not_selected):
+            hiring_table(not_selected, with_reason=True)
+        else:
+            st.info("Everyone was selected or waitlisted.")
+
+    shortlist = pd.concat([selected, waitlisted])
+
+    if len(shortlist):
+        export = shortlist[HIRING_COLUMNS + ["Outcome"]].copy()
+
+        st.download_button(
+            "⬇️ Download Selected and Waitlist",
+            data=export.to_csv(index=False).encode("utf-8"),
+            file_name=f"hiring_shortlist_{tag.lower()}.csv",
+            mime="text/csv"
+        )
+
+    ranked = sim[sim["Eligible"]].sort_values("Rank")
+
+    if len(ranked):
+
+        ch1, ch2 = st.columns(2)
+
+        with ch1:
+            fig = px.scatter(
+                ranked,
+                x="Rank",
+                y="Hire_Score",
+                color="Outcome",
+                title="Hire Score by Rank (cut-off line)",
+                color_discrete_map={
+                    "Selected": "#10B981",
+                    "Waitlist": "#F59E0B",
+                    "Not selected": "#B8C4BC"
+                },
+                hover_data=["Student_Name", "Branch"]
+            )
+
+            fig.add_vline(
+                x=vacancies + 0.5,
+                line_dash="dash",
+                line_color="#1E3A8A",
+                annotation_text="Hiring cut-off"
+            )
+
+            fig.update_layout(
+                paper_bgcolor="white",
+                plot_bgcolor="white",
+                yaxis_title="Hire score",
+                legend_title_text=""
+            )
+
+            st.plotly_chart(
+                fig, use_container_width=True, key="hire_rank_chart"
+            )
+
+        with ch2:
+            if filled:
+                by_branch = (
+                    selected["Branch"].value_counts()
+                    .reindex(BRANCHES, fill_value=0).reset_index()
+                )
+                by_branch.columns = ["Branch", "Selected"]
+
+                fig = px.bar(
+                    by_branch,
+                    x="Branch",
+                    y="Selected",
+                    text="Selected",
+                    title="Selected Students by Branch",
+                    color_discrete_sequence=["#3B82F6"]
+                )
+
+                fig.update_layout(
+                    paper_bgcolor="white",
+                    plot_bgcolor="white"
+                )
+
+                st.plotly_chart(
+                    fig, use_container_width=True,
+                    key="hire_branch_chart"
+                )
+
+    st.caption(
+        "This is a ranking simulation based on the model and assumed "
+        "company criteria. Real selection also depends on interviews, "
+        "openings and other factors, so treat it as guidance, not a "
+        "guarantee."
+    )
+
+
+# =====================================================
+# COHORT HEATMAP (single heatmap on the main page)
+# =====================================================
+
+def render_cohort_heatmap(results):
+
+    st.markdown("---")
+    st.markdown("## 🔥 Cohort Criteria Heatmap")
+
+    h1, h2 = st.columns([2, 1])
+
+    mode = h1.selectbox(
+        "Students to show",
+        [
+            "Highest placement probability",
+            "Lowest placement probability",
+            "Upload order"
+        ],
+        key="heatmap_mode"
+    )
+
+    limit = min(len(results), 100)
+
+    count = int(h2.number_input(
+        "Number of students",
+        min_value=1,
+        max_value=limit,
+        value=min(20, limit),
+        step=1,
+        key="heatmap_count"
+    ))
+
+    if mode == "Highest placement probability":
+        view = results.sort_values(
+            "Placement_Probability", ascending=False
+        ).head(count)
+    elif mode == "Lowest placement probability":
+        view = results.sort_values(
+            "Placement_Probability", ascending=True
+        ).head(count)
+    else:
+        view = results.head(count)
+
+    grid = pd.DataFrame({
+        "Attendance": view["Attendance"],
+        "Assignment": view["Assignment_Score"],
+        "Internal": view["Internal_Marks"],
+        "Previous": view["Previous_Marks"],
+        "Study Hrs": (view["Study_Hours"].astype(float) / 8 * 100).clip(upper=100),
+        "CGPA": view["CGPA"].astype(float) * 10,
+        "10th %": view["Tenth_Pct"],
+        "12th %": view["Twelfth_Pct"],
+        "Coding": view["Coding_Score"],
+        "Communication": view["Communication_Score"],
+        "Projects": (view["Projects"].astype(float) / 5 * 100).clip(upper=100),
+        "Internships": (view["Internships"].astype(float) / 3 * 100).clip(upper=100),
+        "Certifications": (view["Certifications"].astype(float) / 4 * 100).clip(upper=100),
+        "Hackathons": (view["Hackathons"].astype(float) / 3 * 100).clip(upper=100),
+        "Languages": (view["Programming_Languages"].astype(float) / 5 * 100).clip(upper=100)
+    }).astype(float)
+
+    labels = (
+        view["Student_ID"].astype(str) + " · "
+        + view["Student_Name"].astype(str)
+    )
+    duplicated = labels.duplicated(keep=False)
+    labels = labels.where(
+        ~duplicated, labels + " #" + view["Record_ID"].astype(str)
+    )
+    grid.index = labels.values
+
+    fig = px.imshow(
+        grid,
+        text_auto=".0f" if len(grid) <= 30 else False,
+        aspect="auto",
+        color_continuous_scale="RdYlGn",
+        zmin=0,
+        zmax=100,
+        title="Student Criteria Heatmap (0–100 scale)"
+    )
+
+    fig.update_yaxes(dtick=1)
+    fig.update_layout(
+        height=max(380, 26 * len(grid) + 150),
+        paper_bgcolor="white"
+    )
+
+    st.plotly_chart(fig, use_container_width=True, key="cohort_heatmap")
+
+    st.caption(
+        "Green is strong, red is weak. CGPA is shown as CGPA × 10; "
+        "study hours are scaled to 8 hours = 100; project, internship, "
+        "certification, hackathon and language counts are scaled to a "
+        "typical maximum."
+    )
 
 
 # =====================================================
@@ -2440,6 +2928,8 @@ if not results.empty:
             fig, use_container_width=True, key="cohort_skill_gap"
         )
 
+    render_cohort_heatmap(results)
+
     st.download_button(
         "⬇️ Download Prediction Results",
         data=results.to_csv(index=False).encode("utf-8"),
@@ -2536,6 +3026,8 @@ if not results.empty:
                         )
 
                         st.rerun()
+
+    render_hiring_simulator(results)
 
 else:
 
