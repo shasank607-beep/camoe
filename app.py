@@ -14,12 +14,13 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score, f1_score, roc_auc_score, mean_absolute_error
 )
+from twilio.rest import Client
+import streamlit as st
+
 def send_sms(phone, message):
-    """Send an SMS through the configured Twilio account."""
-    from twilio.rest import Client
 
     client = Client(
-        st.secrets["AC31d9c1ea04e1dd1cd1d034e9bbb124f6"],
+        st.secrets["TWILIO_ACCOUNT_SID"],
         st.secrets["TWILIO_AUTH_TOKEN"]
     )
 
