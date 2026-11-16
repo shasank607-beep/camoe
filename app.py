@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -17,81 +18,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# =====================================================
-# CUSTOM LIGHT THEME
-# =====================================================
-
-st.markdown("""
-<style>
-    .stApp {
-        background-color: #F7F8F5;
-        color: #26352D;
-    }
-
-    [data-testid="stSidebar"] {
-        background-color: #EEF2EC;
-    }
-
-    .main-title {
-        font-size: 34px;
-        font-weight: 750;
-        color: #294C3A;
-    }
-
-    .sub-title {
-        color: #718078;
-        font-size: 15px;
-    }
-
-    .student-card {
-        background: white;
-        padding: 18px;
-        border-radius: 16px;
-        border: 1px solid #E5EBE5;
-        margin-bottom: 12px;
-    }
-
-    .student-name {
-        font-size: 19px;
-        font-weight: bold;
-        color: #294C3A;
-    }
-
-    .student-info {
-        color: #718078;
-        font-size: 14px;
-    }
-
-    .success-text {
-        color: #218653;
-        font-weight: bold;
-    }
-
-    .danger-text {
-        color: #D14D4D;
-        font-weight: bold;
-    }
-
-    div[data-testid="stMetric"] {
-        background: white;
-        padding: 17px;
-        border-radius: 14px;
-        border: 1px solid #E5EBE5;
-    }
-
-    .section-heading {
-        color: #294C3A;
-        font-size: 23px;
-        font-weight: 700;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-
-# =====================================================
-# CONSTANTS
-# =====================================================
-
 PASS_MARK = 40
 
 FEATURES = [
@@ -102,71 +28,142 @@ FEATURES = [
     "Study_Hours"
 ]
 
-REQUIRED_TRAINING_COLUMNS = FEATURES + ["Final_Marks"]
+REQUIRED_COLUMNS = FEATURES + ["Final_Marks"]
 
 DATASET_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "student_performance.csv"
 )
 
+# =====================================================
+# THEME
+# =====================================================
+
+st.markdown("""
+<style>
+.stApp {
+    background: #F6F8F5;
+    color: #26352D;
+}
+[data-testid="stSidebar"] {
+    background: #EAF0E9;
+}
+.main-title {
+    font-size: 34px;
+    font-weight: 800;
+    color: #294C3A;
+}
+.subtitle {
+    color: #718078;
+    font-size: 15px;
+}
+.student-card {
+    background: white;
+    padding: 18px;
+    border-radius: 16px;
+    border: 1px solid #E3EAE3;
+    margin-bottom: 10px;
+}
+div[data-testid="stMetric"] {
+    background: white;
+    padding: 15px;
+    border-radius: 14px;
+    border: 1px solid #E3EAE3;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =====================================================
-# LOAD AND CLEAN TRAINING DATA
+# INDIAN STUDENT NAME PROFILES
+# Gender is explicitly assigned with each generated name.
+# No gender is inferred from a name.
+# =====================================================
+
+MALE_NAMES = [
+    "Aarav Sharma", "Arjun Reddy", "Rohan Kumar",
+    "Aditya Shetty", "Vikram Rao", "Karthik Gowda",
+    "Rahul Verma", "Sanjay Patil", "Ishaan Mehta",
+    "Varun Nair", "Pranav Joshi", "Abhishek Das",
+    "Manish Yadav", "Suraj Kulkarni", "Nikhil Bhat"
+]
+
+FEMALE_NAMES = [
+    "Ananya Sharma", "Priya Reddy", "Diya Kumar",
+    "Sneha Shetty", "Aishwarya Rao", "Kavya Gowda",
+    "Meera Verma", "Pooja Patil", "Isha Mehta",
+    "Nandini Nair", "Sanjana Joshi", "Swathi Das",
+    "Neha Yadav", "Riya Kulkarni", "Shreya Bhat"
+]
+
+
+def make_profile(identifier):
+    """Generate a stable example Indian student identity."""
+
+    value = int(
+        hashlib.md5(str(identifier).encode()).hexdigest(),
+        16
+    )
+
+    if value % 2 == 0:
+        gender = "Male"
+        name = MALE_NAMES[(value // 2) % len(MALE_NAMES)]
+        avatar = "👨‍🎓"
+    else:
+        gender = "Female"
+        name = FEMALE_NAMES[(value // 2) % len(FEMALE_NAMES)]
+        avatar = "👩‍🎓"
+
+    return name, gender, avatar
+
+
+# =====================================================
+# LOAD TRAINING DATA
 # =====================================================
 
 @st.cache_data
 def load_training_data():
 
     if not os.path.exists(DATASET_PATH):
-        return None
+        raise FileNotFoundError(
+            "student_performance.csv was not found beside app.py."
+        )
 
     data = pd.read_csv(DATASET_PATH)
 
     missing = [
-        column for column in REQUIRED_TRAINING_COLUMNS
-        if column not in data.columns
+        col for col in REQUIRED_COLUMNS
+        if col not in data.columns
     ]
 
     if missing:
         raise ValueError(
-            "Training dataset is missing these columns: "
-            + ", ".join(missing)
+            "Training CSV is missing: " + ", ".join(missing)
         )
 
-    data = data[REQUIRED_TRAINING_COLUMNS].copy()
+    data = data[REQUIRED_COLUMNS].copy()
 
-    for column in REQUIRED_TRAINING_COLUMNS:
-        data[column] = pd.to_numeric(
-            data[column],
-            errors="coerce"
-        )
+    for col in REQUIRED_COLUMNS:
+        data[col] = pd.to_numeric(data[col], errors="coerce")
 
     data = data.dropna(subset=["Final_Marks"])
 
     if len(data) < 2:
-        raise ValueError(
-            "At least two valid student records are required "
-            "in the training dataset."
-        )
+        raise ValueError("At least two valid training records are required.")
 
-    # Fill missing feature values using median
-    for column in FEATURES:
-        median_value = data[column].median()
+    for col in FEATURES:
+        median = data[col].median()
+        if pd.isna(median):
+            median = 0
+        data[col] = data[col].fillna(median)
 
-        if pd.isna(median_value):
-            median_value = 0
-
-        data[column] = data[column].fillna(median_value)
-
-    # Keep values within reasonable ranges
-    for column in [
+    for col in [
         "Attendance",
         "Assignment_Score",
         "Internal_Marks",
         "Previous_Marks",
         "Final_Marks"
     ]:
-        data[column] = data[column].clip(0, 100)
+        data[col] = data[col].clip(0, 100)
 
     data["Study_Hours"] = data["Study_Hours"].clip(0, 24)
 
@@ -174,384 +171,348 @@ def load_training_data():
 
 
 # =====================================================
-# TRAIN MACHINE LEARNING MODELS
+# TRAIN MODELS
 # =====================================================
 
 @st.cache_resource
 def train_models(data):
 
     X = data[FEATURES]
-
     y_marks = data["Final_Marks"]
+    y_result = (y_marks >= PASS_MARK).astype(int)
 
-    y_result = (
-        data["Final_Marks"] >= PASS_MARK
-    ).astype(int)
-
-    # Predict final marks
     regressor = RandomForestRegressor(
         n_estimators=150,
         random_state=42
     )
 
-    regressor.fit(X, y_marks)
-
-    # Predict pass/fail
     classifier = RandomForestClassifier(
         n_estimators=150,
         random_state=42
     )
 
+    regressor.fit(X, y_marks)
     classifier.fit(X, y_result)
 
     return regressor, classifier
 
 
 # =====================================================
-# CLEAN UPLOADED CSV
+# CLEAN UPLOADED DATA
 # =====================================================
 
-def prepare_uploaded_data(uploaded_data, training_data):
+def clean_student_data(data, training_data):
 
-    uploaded_data = uploaded_data.copy()
+    data = data.copy()
 
-    missing_columns = [
-        column for column in FEATURES
-        if column not in uploaded_data.columns
+    missing = [
+        col for col in FEATURES
+        if col not in data.columns
     ]
 
-    if missing_columns:
+    if missing:
         raise ValueError(
-            "Your CSV is missing these columns: "
-            + ", ".join(missing_columns)
+            "Missing required columns: " + ", ".join(missing)
         )
 
-    # Create Student_ID if it does not exist
-    if "Student_ID" not in uploaded_data.columns:
-        uploaded_data.insert(
-            0,
-            "Student_ID",
-            [f"Student {i+1}" for i in range(len(uploaded_data))]
-        )
+    if "Student_ID" not in data.columns:
+        data["Student_ID"] = [
+            f"STU{i+1:03d}" for i in range(len(data))
+        ]
 
-    # Convert feature columns into numbers
-    for column in FEATURES:
-        uploaded_data[column] = pd.to_numeric(
-            uploaded_data[column],
-            errors="coerce"
-        )
+    if "Student_Name" not in data.columns:
+        data["Student_Name"] = ""
 
-        # Fill missing values using training dataset median
-        median_value = training_data[column].median()
+    if "Gender" not in data.columns:
+        data["Gender"] = ""
 
-        uploaded_data[column] = uploaded_data[column].fillna(
-            median_value
-        )
+    data["Student_ID"] = data["Student_ID"].astype(str)
 
-    # Limit values
-    for column in [
+    for col in FEATURES:
+        data[col] = pd.to_numeric(data[col], errors="coerce")
+        data[col] = data[col].fillna(training_data[col].median())
+
+    for col in [
         "Attendance",
         "Assignment_Score",
         "Internal_Marks",
         "Previous_Marks"
     ]:
-        uploaded_data[column] = uploaded_data[column].clip(0, 100)
+        data[col] = data[col].clip(0, 100)
 
-    uploaded_data["Study_Hours"] = uploaded_data[
-        "Study_Hours"
-    ].clip(0, 24)
+    data["Study_Hours"] = data["Study_Hours"].clip(0, 24)
 
-    return uploaded_data
+    return data
 
 
 # =====================================================
-# GENERATE PREDICTIONS
+# PREDICTION FUNCTION
 # =====================================================
 
 def predict_students(data, regressor, classifier):
 
     X = data[FEATURES]
 
-    predicted_marks = regressor.predict(X)
+    marks = np.clip(regressor.predict(X), 0, 100)
 
-    predicted_result = classifier.predict(X)
+    result = classifier.predict(X)
 
     probabilities = classifier.predict_proba(X)
 
-    # Find probability of passing
-    pass_class_position = np.where(
-        classifier.classes_ == 1
-    )[0]
+    pass_positions = np.where(classifier.classes_ == 1)[0]
 
-    if len(pass_class_position) > 0:
-        pass_probability = probabilities[
-            :, pass_class_position[0]
-        ]
+    if len(pass_positions):
+        pass_probability = probabilities[:, pass_positions[0]] * 100
     else:
         pass_probability = np.zeros(len(data))
 
-    results = data.copy()
+    output = data.copy()
 
-    results["Predicted_Marks"] = np.clip(
-        predicted_marks, 0, 100
-    ).round(2)
+    output["Predicted_Marks"] = np.round(marks, 2)
+    output["Pass_Probability"] = np.round(pass_probability, 2)
 
-    results["Pass_Probability"] = (
-        pass_probability * 100
-    ).round(2)
-
-    results["Predicted_Result"] = [
-        "Pass" if result == 1 else "Fail"
-        for result in predicted_result
+    output["Predicted_Result"] = [
+        "Pass" if value == 1 else "Fail"
+        for value in result
     ]
 
-    results["Status"] = [
+    output["Status"] = [
         "Needs Attention"
-        if result == 0 or marks < PASS_MARK or probability < 60
+        if value == 0 or mark < PASS_MARK or probability < 60
         else "On Track"
-        for result, marks, probability in zip(
-            predicted_result,
-            results["Predicted_Marks"],
-            results["Pass_Probability"]
+        for value, mark, probability in zip(
+            result, marks, pass_probability
         )
     ]
 
-    return results
+    # Assign names and avatars where not supplied
+    names = []
+    genders = []
+    avatars = []
+
+    for _, student in output.iterrows():
+
+        name = str(student["Student_Name"]).strip()
+        gender = str(student["Gender"]).strip().title()
+
+        if not name or name.lower() == "nan":
+            name, gender, avatar = make_profile(
+                student["Student_ID"]
+            )
+        else:
+            if gender == "Male":
+                avatar = "👨‍🎓"
+            elif gender == "Female":
+                avatar = "👩‍🎓"
+            else:
+                # If a supplied name has no gender selected,
+                # use a neutral avatar rather than guessing.
+                gender = "Not specified"
+                avatar = "🧑‍🎓"
+
+        names.append(name)
+        genders.append(gender)
+        avatars.append(avatar)
+
+    output["Student_Name"] = names
+    output["Gender"] = genders
+    output["Avatar"] = avatars
+
+    return output
 
 
 # =====================================================
-# FEATURE IMPORTANCE
+# ADD STUDENTS TO SESSION
 # =====================================================
 
-def show_importance_heatmap(regressor, classifier):
+def add_students(new_results):
 
-    importance_data = pd.DataFrame({
-        "Feature": FEATURES,
-        "Marks Prediction": regressor.feature_importances_,
-        "Pass/Fail Prediction": classifier.feature_importances_
-    })
+    if "student_results" not in st.session_state:
+        st.session_state.student_results = pd.DataFrame()
 
-    heatmap_data = importance_data.set_index("Feature").T
+    existing = st.session_state.student_results.copy()
 
-    fig = px.imshow(
-        heatmap_data,
-        text_auto=".3f",
-        aspect="auto",
-        color_continuous_scale="Greens",
-        labels={
-            "x": "Student Factors",
-            "y": "Model",
-            "color": "Importance"
-        },
-        title="Machine Learning Feature Importance"
+    new_results = new_results.copy()
+
+    next_id = (
+        int(existing["Record_ID"].max()) + 1
+        if not existing.empty else 1
     )
 
-    fig.update_layout(
-        height=300,
-        paper_bgcolor="white",
-        plot_bgcolor="white"
+    new_results["Record_ID"] = range(
+        next_id, next_id + len(new_results)
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    if existing.empty:
+        combined = new_results
+    else:
+        combined = pd.concat(
+            [existing, new_results],
+            ignore_index=True
+        )
 
-    st.caption(
-        "This heatmap shows how important each factor was to the "
-        "trained models overall. It does not show the exact reason "
-        "for an individual student's prediction."
-    )
+    st.session_state.student_results = combined
 
 
 # =====================================================
-# PERSONALIZED SUGGESTIONS
+# SUGGESTIONS
 # =====================================================
 
-def generate_suggestions(student):
+def get_suggestions(student):
 
     suggestions = []
 
     if student["Attendance"] < 75:
         suggestions.append(
-            "📅 Improve attendance. Try to maintain at least 75% attendance."
+            "📅 Improve attendance and aim for at least 75%."
         )
 
     if student["Assignment_Score"] < 50:
         suggestions.append(
-            "📝 Focus on assignments. Complete pending work and practise regularly."
+            "📝 Spend more time completing assignments and practising questions."
         )
 
     if student["Internal_Marks"] < 50:
         suggestions.append(
-            "📚 Improve internal assessment performance through revision and practice tests."
+            "📚 Revise internal assessment topics and take practice tests."
         )
 
     if student["Previous_Marks"] < 50:
         suggestions.append(
-            "🎯 Revise previous topics and identify subjects where you lost marks."
+            "🎯 Revise previously difficult topics and strengthen fundamentals."
         )
 
     if student["Study_Hours"] < 2:
         suggestions.append(
-            "⏰ Try studying consistently for at least 2 hours every day."
-        )
-
-    elif student["Study_Hours"] >= 6:
-        suggestions.append(
-            "🌿 Maintain a healthy study routine with sufficient breaks and sleep."
+            "⏰ Build a regular study routine of at least 2 hours per day."
         )
 
     if student["Pass_Probability"] < 60:
         suggestions.append(
-            "⚠️ Your predicted pass probability is low. Prioritize weaker subjects and seek guidance."
+            "⚠️ Arrange additional academic support and monitor progress."
         )
 
     if not suggestions:
         suggestions.append(
-            "🌟 Good work! Maintain your current academic routine and continue improving."
+            "🌟 Good work! Maintain your current routine and keep improving."
         )
 
     return suggestions
 
 
 # =====================================================
-# INDIVIDUAL STUDENT DASHBOARD
+# INDIVIDUAL DASHBOARD PAGE
 # =====================================================
 
-def show_individual_dashboard(
-    student,
-    training_data,
-    regressor,
-    classifier
-):
+def show_student_page(student, training_data, regressor, classifier):
+
+    if st.button("← Back to Main Dashboard"):
+        st.query_params.clear()
+        st.rerun()
 
     st.markdown("---")
 
     st.markdown(
-        '<div class="section-heading">👨‍🎓 Individual Student Dashboard</div>',
-        unsafe_allow_html=True
-    )
-
-    st.write("Detailed academic profile and prediction analysis.")
-
-    # Student information
-    st.markdown(
         f"""
         <div class="student-card">
-            <div class="student-name">
-                👤 {student['Student_ID']}
-            </div>
-            <div class="student-info">
-                Academic Performance Profile
-            </div>
+            <div style="font-size:65px;">{student['Avatar']}</div>
+            <h1 style="color:#294C3A;">{student['Student_Name']}</h1>
+            <p>Student ID: {student['Student_ID']}</p>
+            <p>Gender: {student['Gender']}</p>
+            <p>Individual Academic Dashboard</p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    # Prediction metrics
-    col1, col2, col3 = st.columns(3)
+    # Student prediction metrics
+    c1, c2, c3 = st.columns(3)
 
-    col1.metric(
+    c1.metric(
         "Predicted Final Marks",
         f"{student['Predicted_Marks']}/100"
     )
 
-    col2.metric(
+    c2.metric(
         "Pass Probability",
         f"{student['Pass_Probability']}%"
     )
 
-    col3.metric(
+    c3.metric(
         "Predicted Result",
         student["Predicted_Result"]
     )
 
     if student["Status"] == "On Track":
-        st.success("🌟 This student is currently predicted to be On Track.")
+        st.success("This student is predicted to be On Track.")
     else:
-        st.warning("⚠️ This student may need additional academic support.")
+        st.warning("This student may need additional academic support.")
 
-    # -------------------------------------------------
-    # STUDENT INPUT VALUES
-    # -------------------------------------------------
+    # Academic input metrics
+    st.markdown("## 📊 Academic Information")
 
-    st.markdown("### 📊 Student Performance Overview")
-
-    metric_columns = st.columns(5)
+    cols = st.columns(5)
 
     for i, feature in enumerate(FEATURES):
 
         value = student[feature]
 
+        label = feature.replace("_", " ")
+
         if feature == "Study_Hours":
-            display_value = f"{value:g} hrs"
+            value_text = f"{value:g} hrs"
         else:
-            display_value = f"{value:g}/100"
+            value_text = f"{value:g}/100"
 
-        metric_columns[i].metric(
-            feature.replace("_", " "),
-            display_value
-        )
+        cols[i].metric(label, value_text)
 
-    # -------------------------------------------------
-    # VISUALIZATION
-    # -------------------------------------------------
+    # Student vs training average
+    st.markdown("## 📈 Individual Performance Visualization")
 
-    st.markdown("### 📈 Individual Performance Visualization")
-
-    # Compare student with training dataset averages
     comparison = pd.DataFrame({
         "Factor": FEATURES,
         "Student": [
             student[feature] for feature in FEATURES
         ],
-        "Dataset Average": [
+        "Training Average": [
             training_data[feature].mean()
             for feature in FEATURES
         ]
     })
 
-    comparison_long = comparison.melt(
+    chart_data = comparison.melt(
         id_vars="Factor",
         var_name="Category",
         value_name="Value"
     )
 
     fig = px.bar(
-        comparison_long,
+        chart_data,
         x="Factor",
         y="Value",
         color="Category",
         barmode="group",
-        title="Student Performance vs Training Dataset Average",
-        color_discrete_sequence=["#6DAD83", "#A7B5D6"]
-    )
-
-    fig.update_layout(
-        paper_bgcolor="white",
-        plot_bgcolor="white"
+        color_discrete_sequence=["#6EAE84", "#A7B8D5"],
+        title="Student Values Compared with Training Dataset Average"
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # -------------------------------------------------
-    # PERCENTILE PROFILE
-    # -------------------------------------------------
+    # Percentile chart
+    st.markdown("## 📍 Student Performance Percentiles")
 
-    st.markdown("### 📍 Student Factor Percentiles")
-
-    percentile_values = []
+    percentiles = []
 
     for feature in FEATURES:
-
         percentile = (
             training_data[feature] <= student[feature]
         ).mean() * 100
 
-        percentile_values.append(round(percentile, 1))
+        percentiles.append(round(percentile, 1))
 
     percentile_data = pd.DataFrame({
         "Factor": FEATURES,
-        "Percentile": percentile_values
+        "Percentile": percentiles
     })
 
     fig = px.bar(
@@ -561,60 +522,84 @@ def show_individual_dashboard(
         orientation="h",
         range_x=[0, 100],
         text="Percentile",
-        title="How This Student Compares with the Training Dataset",
         color="Percentile",
-        color_continuous_scale="Greens"
+        color_continuous_scale="Greens",
+        title="Comparison with Training Dataset"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Feature importance heatmap
+    st.markdown("## 🔥 Prediction Heatmap")
+
+    importance = pd.DataFrame({
+        "Feature": FEATURES,
+        "Marks Model": regressor.feature_importances_,
+        "Pass/Fail Model": classifier.feature_importances_
+    }).set_index("Feature").T
+
+    fig = px.imshow(
+        importance,
+        text_auto=".3f",
+        aspect="auto",
+        color_continuous_scale="Greens",
+        title="Model Feature Importance"
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
     st.caption(
-        "Percentile indicates the percentage of training records "
-        "with a value equal to or lower than this student's value."
+        "This is the overall importance of factors to the trained models, "
+        "not an exact explanation of this student's individual prediction."
     )
 
-    # -------------------------------------------------
-    # HEATMAP
-    # -------------------------------------------------
+    # Suggestions
+    st.markdown("## 💡 Personalized Academic Suggestions")
 
-    st.markdown("### 🔥 Prediction Feature Importance Heatmap")
-
-    show_importance_heatmap(regressor, classifier)
-
-    # -------------------------------------------------
-    # SUGGESTIONS
-    # -------------------------------------------------
-
-    st.markdown("### 💡 Personalized Academic Suggestions")
-
-    suggestions = generate_suggestions(student)
-
-    for suggestion in suggestions:
+    for suggestion in get_suggestions(student):
         st.info(suggestion)
 
-    # -------------------------------------------------
-    # SUMMARY
-    # -------------------------------------------------
-
-    st.markdown("### 📝 Student Summary")
+    # Summary
+    st.markdown("## 📝 Performance Summary")
 
     if student["Status"] == "On Track":
-
         st.success(
             "This student is predicted to be on track. "
             "Continue maintaining consistent academic performance."
         )
-
     else:
-
         st.warning(
-            "This student may require additional academic attention. "
-            "Use the suggestions above to identify areas for improvement."
+            "This student may need additional support. "
+            "Focus on the weaker academic factors listed above."
         )
 
 
 # =====================================================
-# MAIN WEBSITE HEADER
+# INITIALIZE SESSION
+# =====================================================
+
+if "student_results" not in st.session_state:
+    st.session_state.student_results = pd.DataFrame()
+
+if "upload_signature" not in st.session_state:
+    st.session_state.upload_signature = None
+
+
+# =====================================================
+# LOAD TRAINING DATA
+# =====================================================
+
+try:
+    training_data = load_training_data()
+    regressor, classifier = train_models(training_data)
+
+except Exception as error:
+    st.error(f"Training error: {error}")
+    st.stop()
+
+
+# =====================================================
+# HEADER
 # =====================================================
 
 st.markdown(
@@ -623,211 +608,306 @@ st.markdown(
 )
 
 st.markdown(
-    '<div class="sub-title">Understand student performance, predict academic outcomes and discover opportunities for improvement.</div>',
+    '<div class="subtitle">Academic analytics • Machine learning • Student performance prediction</div>',
     unsafe_allow_html=True
 )
 
-st.write("")
-
 
 # =====================================================
-# LOAD TRAINING DATA AND MODELS
+# ROUTE TO INDIVIDUAL STUDENT DASHBOARD
 # =====================================================
 
-try:
+selected_record = st.query_params.get("student")
 
-    training_data = load_training_data()
+if selected_record is not None:
 
-    if training_data is None:
+    all_results = st.session_state.student_results
 
-        st.error(
-            "Training dataset not found. Please keep "
-            "'student_performance.csv' in the same folder as app.py."
-        )
+    if not all_results.empty:
 
-        st.stop()
+        match = all_results[
+            all_results["Record_ID"].astype(str) == str(selected_record)
+        ]
 
-    regressor, classifier = train_models(training_data)
+        if not match.empty:
 
-except Exception as error:
+            selected_student = match.iloc[0]
 
-    st.error(f"Error loading training data: {error}")
+            show_student_page(
+                selected_student,
+                training_data,
+                regressor,
+                classifier
+            )
+
+            st.stop()
+
+    st.warning("Student dashboard not found.")
+    if st.button("Return to Main Dashboard"):
+        st.query_params.clear()
+        st.rerun()
+
     st.stop()
 
 
 # =====================================================
-# CSV UPLOAD SECTION
+# MAIN DASHBOARD
 # =====================================================
 
-st.markdown("## 📁 Upload Student Dataset")
+st.markdown("---")
+
+# -----------------------------------------------------
+# BULK CSV UPLOAD
+# -----------------------------------------------------
+
+st.markdown("## 📁 Bulk Student Upload")
 
 st.write(
-    "Upload a CSV file containing student attendance, assignment "
-    "scores, internal marks, previous marks and study hours."
+    "Upload a CSV containing multiple students to predict their academic performance."
 )
 
 uploaded_file = st.file_uploader(
-    "Choose your student CSV file",
-    type=["csv"]
+    "Choose student CSV",
+    type=["csv"],
+    key="bulk_csv"
 )
 
 if uploaded_file is not None:
 
-    file_signature = hashlib.md5(
-        uploaded_file.getvalue()
-    ).hexdigest()
-
-    # Clear old predictions if a different CSV is uploaded
-    if st.session_state.get("file_signature") != file_signature:
-
-        st.session_state.pop("student_results", None)
-
-        st.session_state["file_signature"] = file_signature
-
     try:
+
+        signature = hashlib.md5(
+            uploaded_file.getvalue()
+        ).hexdigest()
 
         uploaded_data = pd.read_csv(uploaded_file)
 
         st.success(
-            f"CSV uploaded successfully! {len(uploaded_data)} records found."
+            f"{len(uploaded_data)} student records detected."
         )
 
-        with st.expander("View uploaded CSV preview"):
-
+        with st.expander("Preview uploaded CSV"):
             st.dataframe(
                 uploaded_data.head(10),
                 use_container_width=True
             )
 
-        st.write("")
-
         if st.button(
             "🚀 Predict All Students",
             type="primary",
-            use_container_width=True
+            key="bulk_predict"
         ):
 
-            if len(uploaded_data) == 0:
+            if signature != st.session_state.upload_signature:
 
-                st.error("Your CSV file is empty.")
+                # Remove old bulk predictions only when a new CSV is used.
+                old = st.session_state.student_results
 
-            else:
+                if not old.empty:
+                    old = old[old["Source"] != "Bulk CSV"]
 
-                cleaned_data = prepare_uploaded_data(
-                    uploaded_data,
-                    training_data
-                )
+                st.session_state.student_results = old
+                st.session_state.upload_signature = signature
 
-                results = predict_students(
-                    cleaned_data,
-                    regressor,
-                    classifier
-                )
+            cleaned = clean_student_data(
+                uploaded_data,
+                training_data
+            )
 
-                st.session_state["student_results"] = results
+            predictions = predict_students(
+                cleaned,
+                regressor,
+                classifier
+            )
 
-                st.success("Predictions generated successfully!")
+            predictions["Source"] = "Bulk CSV"
+
+            add_students(predictions)
+
+            st.success("Bulk predictions completed!")
 
     except Exception as error:
+        st.error(f"CSV error: {error}")
 
-        st.error(f"Unable to process CSV: {error}")
+
+# -----------------------------------------------------
+# SINGLE STUDENT INPUT
+# -----------------------------------------------------
+
+st.markdown("---")
+
+st.markdown("## 👤 Single Student Prediction")
+
+st.write(
+    "Enter one student's details manually without uploading a CSV."
+)
+
+with st.form("single_student_form"):
+
+    name = st.text_input(
+        "Student Name (optional)",
+        placeholder="Leave blank for an automatically assigned Indian name"
+    )
+
+    gender = st.selectbox(
+        "Gender",
+        ["Male", "Female", "Not specified"]
+    )
+
+    student_id = st.text_input(
+        "Student ID (optional)",
+        placeholder="Example: STU101"
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        attendance = st.number_input(
+            "Attendance (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=80.0
+        )
+
+        assignment = st.number_input(
+            "Assignment Score",
+            min_value=0.0,
+            max_value=100.0,
+            value=70.0
+        )
+
+        internal = st.number_input(
+            "Internal Marks",
+            min_value=0.0,
+            max_value=100.0,
+            value=65.0
+        )
+
+    with col2:
+        previous = st.number_input(
+            "Previous Marks",
+            min_value=0.0,
+            max_value=100.0,
+            value=70.0
+        )
+
+        study_hours = st.number_input(
+            "Study Hours Per Day",
+            min_value=0.0,
+            max_value=24.0,
+            value=3.0
+        )
+
+    submitted = st.form_submit_button(
+        "🔮 Predict Individual Student",
+        use_container_width=True
+    )
+
+if submitted:
+
+    if not student_id.strip():
+        student_id = f"SINGLE{len(st.session_state.student_results) + 1:03d}"
+
+    if not name.strip():
+        generated_name, generated_gender, avatar = make_profile(student_id)
+
+        name = generated_name
+        gender = generated_gender
+
+    else:
+        if gender == "Male":
+            avatar = "👨‍🎓"
+        elif gender == "Female":
+            avatar = "👩‍🎓"
+        else:
+            avatar = "🧑‍🎓"
+
+    single_data = pd.DataFrame([{
+        "Student_ID": student_id,
+        "Student_Name": name,
+        "Gender": gender,
+        "Attendance": attendance,
+        "Assignment_Score": assignment,
+        "Internal_Marks": internal,
+        "Previous_Marks": previous,
+        "Study_Hours": study_hours
+    }])
+
+    single_prediction = predict_students(
+        single_data,
+        regressor,
+        classifier
+    )
+
+    single_prediction["Source"] = "Single Entry"
+
+    add_students(single_prediction)
+
+    st.success(
+        f"Prediction generated for {name}. "
+        "Open their personal dashboard below."
+    )
 
 
 # =====================================================
-# DISPLAY MAIN DASHBOARD
+# DISPLAY MAIN RESULTS
 # =====================================================
 
-if "student_results" in st.session_state:
+results = st.session_state.student_results
 
-    results = st.session_state["student_results"]
+if not results.empty:
 
     st.markdown("---")
 
-    st.markdown(
-        '<div class="section-heading">📊 Student Analytics Dashboard</div>',
-        unsafe_allow_html=True
-    )
+    st.markdown("## 📊 Main Student Analytics Dashboard")
 
-    # -------------------------------------------------
-    # MAIN METRICS
-    # -------------------------------------------------
+    total = len(results)
 
-    total_students = len(results)
-
-    passed_students = (
+    passed = (
         results["Predicted_Result"] == "Pass"
     ).sum()
 
-    failed_students = (
+    failed = (
         results["Predicted_Result"] == "Fail"
     ).sum()
 
-    at_risk_students = (
+    attention = (
         results["Status"] == "Needs Attention"
     ).sum()
 
-    average_marks = results["Predicted_Marks"].mean()
+    average = results["Predicted_Marks"].mean()
 
-    col1, col2, col3, col4 = st.columns(4)
+    c1, c2, c3, c4 = st.columns(4)
 
-    col1.metric(
-        "👨‍🎓 Total Students",
-        total_students
-    )
+    c1.metric("👨‍🎓 Total Students", total)
+    c2.metric("✅ Predicted Pass", int(passed))
+    c3.metric("⚠️ Needs Attention", int(attention))
+    c4.metric("📈 Average Marks", f"{average:.2f}")
 
-    col2.metric(
-        "✅ Predicted Pass",
-        int(passed_students)
-    )
+    # Main charts
+    st.markdown("### Overall Prediction Analysis")
 
-    col3.metric(
-        "⚠️ Needs Attention",
-        int(at_risk_students)
-    )
+    left, right = st.columns(2)
 
-    col4.metric(
-        "📈 Average Predicted Marks",
-        f"{average_marks:.2f}"
-    )
+    with left:
 
-    # -------------------------------------------------
-    # MAIN CHARTS
-    # -------------------------------------------------
-
-    st.markdown("### 📊 Overall Student Performance")
-
-    chart1, chart2 = st.columns(2)
-
-    with chart1:
-
-        result_counts = results[
-            "Predicted_Result"
-        ].value_counts().reset_index()
-
-        result_counts.columns = [
-            "Result",
-            "Students"
-        ]
+        counts = results["Predicted_Result"].value_counts()
 
         fig = px.pie(
-            result_counts,
-            names="Result",
-            values="Students",
+            names=counts.index,
+            values=counts.values,
             hole=0.55,
-            title="Predicted Pass and Fail Distribution",
-            color="Result",
+            title="Pass and Fail Distribution",
+            color=counts.index,
             color_discrete_map={
                 "Pass": "#65A982",
                 "Fail": "#E27C7C"
             }
         )
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    with chart2:
+    with right:
 
         fig = px.histogram(
             results,
@@ -837,24 +917,15 @@ if "student_results" in st.session_state:
             color_discrete_sequence=["#83B99A"]
         )
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    # -------------------------------------------------
-    # STUDENT RESULTS TABLE
-    # -------------------------------------------------
-
-    st.markdown("### 📋 Individual Student Prediction Results")
+    # Results table
+    st.markdown("### 📋 Prediction Results")
 
     display_columns = [
         "Student_ID",
-        "Attendance",
-        "Assignment_Score",
-        "Internal_Marks",
-        "Previous_Marks",
-        "Study_Hours",
+        "Student_Name",
+        "Gender",
         "Predicted_Marks",
         "Pass_Probability",
         "Predicted_Result",
@@ -867,78 +938,57 @@ if "student_results" in st.session_state:
         hide_index=True
     )
 
-    # -------------------------------------------------
-    # DOWNLOAD RESULTS
-    # -------------------------------------------------
-
-    csv_output = results.to_csv(
-        index=False
-    ).encode("utf-8")
-
+    # Download
     st.download_button(
-        label="⬇️ Download Student Prediction Results",
-        data=csv_output,
+        "⬇️ Download All Prediction Results",
+        data=results.to_csv(index=False).encode("utf-8"),
         file_name="student_prediction_results.csv",
-        mime="text/csv",
-        use_container_width=True
+        mime="text/csv"
     )
 
     # -------------------------------------------------
-    # INDIVIDUAL STUDENT CARDS
+    # STUDENT CARDS
     # -------------------------------------------------
 
     st.markdown("---")
 
-    st.markdown(
-        '<div class="section-heading">👥 Individual Student Profiles</div>',
-        unsafe_allow_html=True
-    )
+    st.markdown("## 👥 Individual Student Profiles")
 
     st.write(
-        "Choose a student below to explore their individual academic dashboard."
+        "Click the student's avatar button to open their personal dashboard."
     )
 
-    # Search students
-    search_text = st.text_input(
-        "🔍 Search Student ID",
-        placeholder="Enter student ID..."
+    search = st.text_input(
+        "🔍 Search student by name or ID"
     )
 
-    filtered_results = results.copy()
+    filtered = results.copy()
 
-    if search_text:
-
-        filtered_results = filtered_results[
-            filtered_results["Student_ID"]
-            .astype(str)
-            .str.contains(search_text, case=False, na=False)
+    if search:
+        filtered = filtered[
+            filtered["Student_Name"].astype(str).str.contains(
+                search, case=False, na=False
+            )
+            |
+            filtered["Student_ID"].astype(str).str.contains(
+                search, case=False, na=False
+            )
         ]
 
-    if len(filtered_results) == 0:
-
-        st.warning("No matching students found.")
-
+    if filtered.empty:
+        st.info("No students found.")
     else:
 
-        st.write(
-            f"Showing {len(filtered_results)} student(s)."
-        )
-
-        # Display student cards in three columns
-        student_indices = filtered_results.index.tolist()
-
-        for start in range(0, len(student_indices), 3):
+        for start in range(0, len(filtered), 3):
 
             columns = st.columns(3)
 
-            for column, student_index in zip(
+            for col, (_, student) in zip(
                 columns,
-                student_indices[start:start + 3]
+                filtered.iloc[start:start + 3].iterrows()
             ):
 
-                student = results.loc[student_index]
-
-                with column:
+                with col:
 
                     status_color = (
                         "#218653"
@@ -949,10 +999,13 @@ if "student_results" in st.session_state:
                     st.markdown(
                         f"""
                         <div class="student-card">
-                            <div style="font-size:30px;">👨‍🎓</div>
-                            <div class="student-name">
-                                {student['Student_ID']}
+                            <div style="font-size:45px;">
+                                {student['Avatar']}
                             </div>
+                            <h3 style="color:#294C3A;">
+                                {student['Student_Name']}
+                            </h3>
+                            <p>Student ID: {student['Student_ID']}</p>
                             <p>Predicted Marks:
                                 <b>{student['Predicted_Marks']}</b>
                             </p>
@@ -967,74 +1020,42 @@ if "student_results" in st.session_state:
                         unsafe_allow_html=True
                     )
 
-    # -------------------------------------------------
-    # SELECT INDIVIDUAL STUDENT
-    # -------------------------------------------------
+                    # Clicking the avatar button opens a separate dashboard view
+                    if st.button(
+                        f"{student['Avatar']} Open Personal Dashboard",
+                        key=f"student_{student['Record_ID']}",
+                        use_container_width=True
+                    ):
 
-    st.markdown("---")
+                        st.query_params["student"] = str(
+                            student["Record_ID"]
+                        )
 
-    st.markdown("### 🔎 Explore Individual Student Dashboard")
-
-    student_options = results.index.tolist()
-
-    selected_index = st.selectbox(
-        "Select a student",
-        options=student_options,
-        format_func=lambda i: (
-            f"{results.loc[i, 'Student_ID']} — "
-            f"{results.loc[i, 'Predicted_Result']} — "
-            f"{results.loc[i, 'Predicted_Marks']} marks"
-        )
-    )
-
-    selected_student = results.loc[selected_index]
-
-    # Display selected student's full dashboard
-    show_individual_dashboard(
-        selected_student,
-        training_data,
-        regressor,
-        classifier
-    )
+                        st.rerun()
 
 else:
 
-    # -------------------------------------------------
-    # BEFORE CSV UPLOAD
-    # -------------------------------------------------
-
-    st.markdown("---")
-
-    st.markdown("## 💡 How to Use This Dashboard")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-
-        st.markdown("### 📁 Step 1")
-
-        st.write(
-            "Upload your student CSV file containing academic information."
-        )
-
-    with col2:
-
-        st.markdown("### 🤖 Step 2")
-
-        st.write(
-            "The machine learning models predict final marks and pass probability."
-        )
-
-    with col3:
-
-        st.markdown("### 📊 Step 3")
-
-        st.write(
-            "Explore individual student dashboards, visualizations, heatmaps and suggestions."
-        )
-
     st.info(
-        "Upload a CSV file above to start analysing student performance."
+        "Upload a CSV or enter a single student's details to begin."
+    )
+
+    st.markdown("### How it works")
+
+    a, b, c = st.columns(3)
+
+    a.markdown(
+        "**📁 Bulk Upload**\n\n"
+        "Upload several student records at once."
+    )
+
+    b.markdown(
+        "**👤 Single Entry**\n\n"
+        "Enter one student's academic details manually."
+    )
+
+    c.markdown(
+        "**📊 Personal Dashboard**\n\n"
+        "Open individual student profiles with predictions, charts and suggestions."
     )
 
 
@@ -1046,11 +1067,12 @@ st.markdown("---")
 
 st.markdown(
     """
-    <div style="text-align:center;color:#89968D;font-size:13px;">
+    <div style="text-align:center;color:#89968D;">
         Student Performance Insights | Data Science Project
         <br>
-        Machine Learning • Data Visualization • Academic Analytics
+        Machine Learning • Data Analytics • Academic Insights
     </div>
     """,
     unsafe_allow_html=True
 )
+
